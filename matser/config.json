@@ -1,0 +1,6 @@
+{
+  "ReadTimeOut": 5,
+  "WriteTimeOut": 5,
+  "Port":8080,
+  "Etcd":"127.0.0.1:2379"
+}
