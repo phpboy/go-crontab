@@ -13,33 +13,31 @@ func PushToChan(obj *common.EventObj)  {
 	EventChan <- obj
 }
 
-func Execute(eventInfo *common.EventObj) (output []byte,err error) {
-
+func ModifyCrontabs(eventInfo *common.EventObj) {
 	var (
 		exists bool
 		expr *cronexpr.Expression
 	)
 	switch eventInfo.Type {
-	case 0:
-		if expr,err = cronexpr.Parse(eventInfo.CronObj.Exp);err!=nil{
-			fmt.Println(err)
-		}
-		Crontabs[eventInfo.CronObj.Name] = &Crontab{
-			Name:eventInfo.CronObj.Name,
-			Cmd:eventInfo.CronObj.Cmd,
-			Expr:expr,
-			NextTime:time.Now(),
-		}
-	case 1:
-		if _,exists=Crontabs[eventInfo.CronObj.Name];exists{
-			delete(Crontabs,eventInfo.CronObj.Name)
-		}
+		case 0:
+			expr,_ = cronexpr.Parse(eventInfo.CronObj.Exp)
+			Crontabs[eventInfo.CronObj.Name] = &Crontab{
+				Name:eventInfo.CronObj.Name,
+				Cmd:eventInfo.CronObj.Cmd,
+				Expr:expr,
+				NextTime:time.Now(),
+			}
+		case 1:
+			if _,exists=Crontabs[eventInfo.CronObj.Name];exists{
+				delete(Crontabs,eventInfo.CronObj.Name)
+			}
+		case 2:
 	}
 
 	return
 }
 
-func ExecAll() (duration time.Duration) {
+func RunCrontabs() (duration time.Duration) {
 
 	var(
 		cmd *exec.Cmd
@@ -47,6 +45,7 @@ func ExecAll() (duration time.Duration) {
 		output []byte
 		err error
 		nearTime *time.Time
+		log *LogObj
 	)
 
 	if len(Crontabs)<1{
@@ -61,9 +60,21 @@ func ExecAll() (duration time.Duration) {
 			cmd = exec.CommandContext(context.TODO(),"C:\\cygwin64\\bin\\bash.exe","-c",cron.Cmd)
 			if output,err = cmd.CombinedOutput();err !=nil{
 				fmt.Println("err exec:",err)
+				continue
+			}else{
+				cron.NextTime = cron.Expr.Next(time.Now())
+
+				log = &LogObj{
+					JobName:cron.Name,
+					Command:cron.Cmd,
+					Err:"",
+					Output:string(output),
+					PlanTime:cron.NextTime.UnixNano()/1000/1000,
+				}
+				fmt.Println("push to log ",log)
+				PushToLogChan(log)
 			}
-			cron.NextTime = cron.Expr.Next(time.Now())
-			fmt.Println("output:",string(output))
+
 		}
 		if nearTime == nil || cron.NextTime.Before(*nearTime){
 			nearTime = &cron.NextTime

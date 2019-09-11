@@ -20,13 +20,17 @@ type Crontab struct {
 }
 
 func InitScheduler(){
+	//crontab修改删除事件
 	EventChan = make(chan *common.EventObj,10)
+	//crontab数据表
 	Crontabs = make(map[string]*Crontab)
-	WatchEtcd()
+	//协程监听ETCD
+	Watch()
+	//协程循环执行crontab
 	Loop()
 }
 
-func WatchEtcd(){
+func Watch(){
 
 	var (
 		resp *clientv3.GetResponse
@@ -47,8 +51,6 @@ func WatchEtcd(){
 		fmt.Println(string(v.Key),string(v.Value))
 		PushToChan(common.BuildEvent(0,[]byte(v.Value)))
 	}
-
-	fmt.Println(revStart)
 
 	go func() {
 
@@ -73,27 +75,27 @@ func WatchEtcd(){
 }
 
 func Loop()  {
-
 	var(
 		Event *common.EventObj
 		timer *time.Timer
 		duration time.Duration
 	)
 
-	duration = ExecAll()
+	duration = RunCrontabs()
 
 	timer = time.NewTimer(duration)
 
-	for {
-		select {
-		case Event=<-EventChan:
-			Execute(Event)
-		case <-timer.C:
+	go func() {
+		for {
+			select {
+				case Event=<-EventChan:
+					ModifyCrontabs(Event)
+				case <-timer.C://定时器到时 线程释放 继续循环
+			}
+
+			duration = RunCrontabs()
+
+			timer.Reset(duration)
 		}
-
-		duration = ExecAll()
-
-		timer.Reset(duration)
-	}
-
+	}()
 }
